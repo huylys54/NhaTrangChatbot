@@ -1,0 +1,14 @@
+unstructured
+langchain-community
+langchain
+crawl4ai
+scikit-learn
+chromadb
+groq
+rank_bm25
+pypdf
+huggingface_hub
+sentence-transformers
+requests
+streamlit
+schedule

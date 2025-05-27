@@ -1,0 +1,9 @@
+{
+    "dependencies": [
+      "."
+    ],
+    "graphs": {
+      "agent": "./src/rag/generator.py:ConversationalRetrievalAgent"
+    },
+    "env": ".env"
+  }
