@@ -1,27 +1,25 @@
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
 from langchain.schema import Document
-from sklearn.feature_extraction.text import TfidfVectorizer
+from rank_bm25 import BM25Okapi
 from typing import List, Tuple
 import torch
 import os
 import pickle
 from config import EMBEDDING_MODEL
 
-
 class HybridIndexer:
-    def __init__(self, all_sections=None, persist_directory='db', tfidf_directory='tfidf'):
+    def __init__(self, all_sections=None, persist_directory='db', bm25_directory='bm25'):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.all_sections = all_sections
         self.persist_directory = persist_directory
         self.vectordb = None
-        self.tfidf_directory = tfidf_directory
-        self.tfidf_path = os.path.join(self.tfidf_directory, "tfidf.pkl")
-        self.sections_path = os.path.join(self.tfidf_directory, "sections.pkl")
-        self.tfidf_vectorizer = None
-        self.tfidf_matrix = None
+        self.bm25_directory = bm25_directory
+        self.bm25_path = os.path.join(self.bm25_directory, "bm25_index.pkl")
+        self.sections_path = os.path.join(self.bm25_directory, "sections.pkl")
+        self.bm25_index = None
         self.doc_id_to_index = {}
-        
+
     def create(self):
         embedding = HuggingFaceEmbeddings(
             model_name=EMBEDDING_MODEL,
@@ -42,32 +40,24 @@ class HybridIndexer:
         else:
             raise ValueError("No documents provided to create a new index.")
 
-        # TF-IDF: create or load
-        if os.path.exists(self.tfidf_path):
-            with open(self.tfidf_path, "rb") as f:
-                self.tfidf_vectorizer, self.tfidf_matrix = pickle.load(f)
+        # BM25: create or load
+        if os.path.exists(self.bm25_path):
+            with open(self.bm25_path, "rb") as f:
+                self.bm25_index = pickle.load(f)
         elif self.all_sections:
-            self.tfidf_vectorizer = TfidfVectorizer(
-                stop_words=None,
-                lowercase=True,
-                norm='l2',
-                sublinear_tf=True
-            )
-            texts = [doc.page_content for doc in self.all_sections]
-            self.tfidf_matrix = self.tfidf_vectorizer.fit_transform(texts)
-            with open(self.tfidf_path, "wb") as f:
-                pickle.dump((self.tfidf_vectorizer, self.tfidf_matrix), f)
+            texts = [doc.page_content.split(" ") for doc in self.all_sections]
+            self.bm25_index = BM25Okapi(texts)
+            with open(self.bm25_path, "wb") as f:
+                pickle.dump(self.bm25_index, f)
         else:
-            raise ValueError("No documents provided to create a new TF-IDF index.")
+            raise ValueError("No documents provided to create a new BM25 index.")
 
         # Persist all_sections for later retrieval if available
-       
         if self.all_sections:
             with open(self.sections_path, "wb") as f:
                 pickle.dump(self.all_sections, f)
             for idx, doc in enumerate(self.all_sections):
                 self.doc_id_to_index[doc.metadata['doc_id']] = idx
-        # If not available, try to load from disk
         elif os.path.exists(self.sections_path):
             with open(self.sections_path, "rb") as f:
                 self.all_sections = pickle.load(f)
@@ -76,13 +66,20 @@ class HybridIndexer:
         else:
             self.all_sections = None  # Explicitly set to None
 
-
     def bm25_search(self, query: str, k: int=10) -> List[Tuple[Document, float]]:
         """Find top k similarity document using BM25"""
-        query_vec = self.tfidf_vectorizer.transform([query])
-        scores = (self.tfidf_matrix * query_vec.T).toarray().flatten()
-        top_k_idx = scores.argsort()[::-1][:k]
-        return [(self.all_sections[i], scores[i]) for i in top_k_idx]
+        query_tokens = query.split(" ")
+        scores = self.bm25_index.get_scores(query_tokens)
+        min_score = min(scores)
+        max_score = max(scores)
+        # Normalize scores to [0, 1]
+        
+        if max_score - min_score > 0:
+            norm_scores = [(score - min_score) / (max_score - min_score) for score in scores]
+        else:
+            norm_scores = [1.0 for _ in scores]
+        top_k_idx = sorted(range(len(norm_scores)), key=lambda i: norm_scores[i], reverse=True)[:k]
+        return [(self.all_sections[i], norm_scores[i]) for i in top_k_idx]
 
     def embedding_search(self, query:str, k:int=10) -> List[Tuple[Document, float]]:
         """Find top k similarity document using chroma vector search"""
@@ -98,31 +95,24 @@ class HybridIndexer:
         ) -> List[Document]:
         bm25_docs = self.bm25_search(query, k=k*2)
         emb_docs = self.embedding_search(query, k=k*2)
-        # Combine and deduplicate using reciprocal rank fusion
-        doc_scores = {}
-        for doc, score in bm25_docs:
-            doc_id = doc.metadata['doc_id']
-            score = score * bm25_weight
-            doc_scores[doc_id] = doc_scores.get(doc_id, 0) + score
-            doc_scores[(doc_id, 'doc')] = doc
-            
-        for doc, score in emb_docs:
-            doc_id = doc.metadata['doc_id']
-            score = score * emb_weight
-            doc_scores[doc_id] = doc_scores.get(doc_id, 0) + score
-            doc_scores[(doc_id, 'doc')] = doc
-            
-        # Filter by score threshold
-        filtered_docs = [
-            doc_scores[(doc_id, 'doc')]
-            for doc_id in doc_scores
-            if isinstance(doc_id, str) and doc_scores[doc_id] >= score_threshold
-        ]
-           
-        # Sort by combined score and return top k
-        filtered_docs.sort(
-            key=lambda doc: doc_scores[doc.metadata['doc_id']],
-            reverse=True
-        )
+
+        # Build rank dictionaries
+        bm25_ranks = {doc.metadata['doc_id']: rank+1 for rank, (doc, _) in enumerate(bm25_docs)}
+        emb_ranks = {doc.metadata['doc_id']: rank+1 for rank, (doc, _) in enumerate(emb_docs)}
         
-        return filtered_docs[:k]
+        # Union of doc_ids from both methods
+        all_doc_ids = set(bm25_ranks.keys()) | set(emb_ranks.keys())
+
+        doc_map = {doc.metadata['doc_id']: doc for doc, _ in bm25_docs + emb_docs}
+
+        fused_scores = {}
+        for doc_id in all_doc_ids:
+            rank_bm25 = bm25_ranks.get(doc_id, k*2+1)
+            rank_emb = emb_ranks.get(doc_id, k*2+1)
+            fused_score = bm25_weight * (1 / rank_bm25) + emb_weight * (1 / rank_emb)
+            if fused_score >= score_threshold:
+                fused_scores[doc_id] = fused_score
+
+        # Sort and return top k documents passing the threshold
+        top_doc_ids = sorted(fused_scores, key=lambda x: fused_scores[x], reverse=True)[:k]
+        return [doc_map[doc_id] for doc_id in top_doc_ids]

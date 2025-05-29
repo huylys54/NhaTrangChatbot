@@ -1,7 +1,7 @@
 from langgraph.graph import StateGraph, END
-from typing import TypedDict, Dict
+from typing import TypedDict, Dict, Optional
 from langchain_groq import ChatGroq
-from together import Together
+from langchain_together import ChatTogether
 from langchain.retrievers.document_compressors import CrossEncoderReranker
 from langchain_community.cross_encoders import HuggingFaceCrossEncoder
 from langchain.memory import ConversationBufferWindowMemory
@@ -25,7 +25,7 @@ class ChatState(TypedDict):
     
 
 class ConversationalRetrievalAgent:
-    def __init__(self, indexer, temperature=0.5, max_history_tokens=1000):
+    def __init__(self, indexer, temperature=0.2, max_history_tokens=1000):
         self.indexer = indexer
         self.temperature = temperature
         self.llm_response = ChatGroq(
@@ -37,13 +37,19 @@ class ConversationalRetrievalAgent:
             max_retries=2,
             streaming=True
         )
-        self.llm_router = Together(api_key=os.getenv('TOGETHER_API_KEY'))
+        self.llm_router = ChatTogether(
+            api_key=os.getenv('TOGETHER_API_KEY'),
+            model="meta-llama/Llama-3.3-70B-Instruct-Turbo-Free",
+            temperature=0.1,
+            max_tokens=10,
+            max_retries=2
+        )
         self.reranker = CrossEncoderReranker(
             model=HuggingFaceCrossEncoder(model_name="cross-encoder/ms-marco-MiniLM-L-6-v2")
         )
         
         self.max_history_tokens = max_history_tokens
-        self.tokenizer = AutoTokenizer.from_pretrained(
+        self.tokenizer = AutoTokenizer.from_pretrained( # for estimate token count
             "google/gemma-2-9b-it",
             token=os.getenv('HUGGINGFACE_API_KEY')
         )
@@ -75,17 +81,20 @@ class ConversationalRetrievalAgent:
                 "You are a routing assistant for a Nha Trang Tourism Chatbot."
                 "Given a user query and conversation history, determine the best action: 'retrieve' (fetch from pre-crawled documents), 'search' (web search for real-time data), or 'weather' (fetch weather data)."
                 "Consider the query's language and intent.\n"
-                "Default to 'retrieve' for most travel-related queries (e.g., places to visit, activities, cuisine, culture, attractions), as the database contains comprehensive Nha Trang travel information.\n"
+                "Default to 'retrieve' for most travel-related queries (e.g., places to visit, activities, cuisine, culture, attractions) generic/non-specific queries (e.g., greetings, casual conversation) to leverage the comprehensive Nha Trang travel database.\n"
                 "Choose 'search' only for queries explicitly requesting real-time or recent information (e.g., containing 'today', 'now', 'current events', 'this week').\n"
                 "Choose 'weather' for queries about weather conditions (e.g., 'weather', 'temperature', 'forecast', 'how it feel like', 'temperature').\n"
                 "Return only the action name: [retrieve|search|weather]\n"
-                "History: {history}\nQuery: {query}\nLanguage: {language}"),
+                "History: {history}\nLanguage: {language}"),
             "transform_query": (
                 "You are a query optimization assistant for a keyword-based web search engine. Given a user query, rewrite it into a concise, keyword-focused search query optimized for keyword matching (e.g., like Google or Tavily). Remove unnecessary words, focus on key terms, and ensure clarity. Preserve the intent and language of the original query."
                 "Return only the transformed query.\nQuery: {query}\nLanguage: {language}"),
             "generate_response": (
                 "You are a travel chatbot for Nha Trang, Vietnam. Your role is to provide informative, concise, and accurate answers about travel-related topics (destinations, cuisine, festivals, activities, culture). Respond in the language specified by the user (ISO 639-1 code, e.g., 'vi' for Vietnamese, 'en' for English, 'zh' for Chinese). Use the provided context and conversation history to tailor your response. If context is empty, rely on general knowledge or indicate a lack of specific information. Keep answers between 100 and 700 words. Ensure responses are engaging, helpful, and culturally sensitive."
-                "History chat: {history}\nContext: {context}\nLanguage: {language}")
+                "History chat: {history}\nContext: {context}\nLanguage: {language}"),
+            "translate_to_vi": (
+                "Translate the following text to Vietnamese. Return only the translated text, without explanation or extra information.\n\nText: {text}"
+            )
         }
         self.app = self._build_graph()
         
@@ -118,7 +127,7 @@ class ConversationalRetrievalAgent:
     
     def detect_lang(self, state: ChatState) -> ChatState:
         """Detect query language"""
-        if state["language"]:
+        if state["language"] and state["language"] != "":
             return state
         try:
             state["language"] = detect(state["query"])
@@ -127,16 +136,29 @@ class ConversationalRetrievalAgent:
         return state
     
     
-    def _retrieve(self, query: str, language: str) -> Dict:
-        """Retrieve documents using HybridIndexer and CrossEncoderReranker."""
+    def _translate_to_vi(self, query) -> str:
+        """Translate text to Vietnamese using LLM."""
+        prompt = self.prompts["translate_to_vi"].format(text=query)
+        messages = [("system", prompt), ("user", query)]
         try:
-            docs = self.indexer.hybrid_search(query, k=30, score_threshold=0.0)
-            if not docs:
-                return {"context":"","error":"No documents found"}
-            self.reranker.top_n = 10
-            reranked = self.reranker.compress_documents(documents=docs, query=query)
-            context = "\n".join(d.page_content for d in reranked)
+            response = self.llm_router.invoke(messages)
+            return response.content.strip()
+        except Exception as e:
+            print(f"Translation failed: {str(e)}")
+            return query  # Fallback to original text
+
+    def _retrieve(self, query: str, language: str) -> Dict:
+        """Retrieve documents using HybridIndexer and CrossEncoderReranker, with translation if needed."""
+        try:
+            query_vi = query
+            if language != "vi":
+                query_vi = self._translate_to_vi(query)
+            print(f"Transformed query: {query_vi}")
+            docs = self.indexer.hybrid_search(query_vi, k=30, score_threshold=0.4)
             
+            self.reranker.top_n = 10
+            reranked = self.reranker.compress_documents(documents=docs, query=query_vi)
+            context = "\n".join(d.page_content for d in reranked)
             return {"context":context, "error":""}
         except Exception as e:
             return {"context":"","error":str(e)}
@@ -148,14 +170,10 @@ class ConversationalRetrievalAgent:
             query=query,
             language=language
         )
+        messages = [("system", prompt), ("user", query)]
         try:
-            response = self.llm_router.chat.completions.create(
-                model="meta-llama/Llama-3.3-70B-Instruct-Turbo-Free",
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.1,
-                max_tokens=70
-            )
-            transformed_query = response.choices[0].message.content.strip()
+            response = self.llm_router.invoke(messages)
+            transformed_query = response.content.strip()
             return transformed_query if transformed_query else query
         except Exception as e:
             print(f"Query transformation failed: {str(e)}")
@@ -199,18 +217,13 @@ class ConversationalRetrievalAgent:
         """Classify query intent using LLaMA 3 70B Instruct Turbo."""
         history = self._truncate_history(state["history"])
         prompt = self.prompts["classify_intent"].format(
-            history=history,
-            query=state["query"],
-            language=state["language"]
+            history=history, language=state["language"]
         )
+        messages = [("system", prompt), ("user", state["query"])]
         try:
-            response = self.llm_router.chat.completions.create(
-                model="meta-llama/Llama-3.3-70B-Instruct-Turbo-Free",
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.1,
-                max_tokens=10
-            )
-            state["intent"] = response.choices[0].message.content.strip()
+            response = self.llm_router.invoke(messages)
+            intent = response.content
+            state["intent"] = intent.strip()
             if state["intent"] not in self.tools:
                 state["intent"] = "retrieve" if self.indexer.all_sections else "search"
         except Exception as e:
@@ -225,6 +238,7 @@ class ConversationalRetrievalAgent:
         if not fn:
             state.update({"context":"","error":"Invalid intent"})
             return state
+        print(f"Executing tool: {state['intent']}")
         res = fn(state["query"], state["language"])  # weather ignores args
         state.update(res)
         return state
@@ -232,10 +246,12 @@ class ConversationalRetrievalAgent:
             
     def handle_error(self, state: ChatState) -> ChatState:
         """Handle error from tool excution"""
+        
         if not state["error"] or state["intent"]=="search":
             return state
         # fallback to search
         try:
+            print(f"Error occurred: {state['error']}. Fallback to web search.")
             res = self._web_search(state["query"], state["language"])
             state.update({"intent":"search", **res, "error":""})
         except Exception as e:
@@ -263,6 +279,7 @@ class ConversationalRetrievalAgent:
             state["error"] = str(e)
         # save memory
         self.memory.save_context(inputs={"human":state["query"]}, outputs={"ai":state["response"]})
+        print(state)
         return state
     
     
@@ -294,7 +311,7 @@ class ConversationalRetrievalAgent:
         history = self.memory.load_memory_variables({})["chat_history"]  # already formatted string
         init_state: ChatState = {
             "query": question,
-            "language": language or "",
+            "language": language if language else "",
             "context": "",
             "history": history,
             "response": "",
@@ -302,5 +319,10 @@ class ConversationalRetrievalAgent:
             "error": ""
         }
         final = self.app.invoke(init_state)
-        self.memory.save_context(inputs={"human": question}, outputs={"ai": final["response"]})
+        
         return final["response"]
+
+
+
+
+

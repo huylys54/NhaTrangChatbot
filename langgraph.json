@@ -3,7 +3,7 @@
       "."
     ],
     "graphs": {
-      "agent": "./src/rag/generator.py:ConversationalRetrievalAgent"
+      "agent": "./tests/test_rag.py:test_agent"
     },
     "env": ".env"
   }

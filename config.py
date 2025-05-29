@@ -10,7 +10,7 @@ DATA_DIR = os.path.join(BASE_DIR, "data")
 RAW_DATA_DIR = os.path.join(DATA_DIR, "raw")
 CLEANED_DATA_DIR = os.path.join(DATA_DIR, "processed")
 CHROMA_DB_DIR = os.path.join(DATA_DIR, "chroma_db")
-TFIDF_DIR = os.path.join(DATA_DIR, "tfidf")
+BM25_DIR = os.path.join(DATA_DIR, "bm25")
 
 # Document chunking settings
 CHUNK_SIZE = 1000
@@ -18,7 +18,7 @@ CHUNK_OVERLAP = 50
 GLOB_PATTERN = "./**/*.md"
 
 # Embedding model
-EMBEDDING_MODEL = "intfloat/multilingual-e5-base"
+EMBEDDING_MODEL = "keepitreal/vietnamese-sbert"
 
 
 # Crawler settings
