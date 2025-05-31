@@ -19,13 +19,15 @@ indexer.create()
 agent = ConversationalRetrievalAgent(indexer=indexer)
 
 
+
+
 @router.post("/chat")
 async def ask_chatbot(req: ChatRequest):
     """
-    Handle chat requests by querying the RAG agent.
+    Handle chat requests by querying the RAG agent and returning the full response.
     """
-    response = agent.ask(req.query)
-    return {"respone": response}
+    result = agent.ask(req.query)
+    return {"response": result}
 
 @router.get("/history")
 def get_history():

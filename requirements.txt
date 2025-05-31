@@ -15,4 +15,6 @@ chromadb
 python-dotenv
 langchain-core
 rank-bm25
+streamlit
+httpx
 tqdm

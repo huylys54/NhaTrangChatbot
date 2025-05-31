@@ -114,5 +114,6 @@ class HybridIndexer:
                 fused_scores[doc_id] = fused_score
 
         # Sort and return top k documents passing the threshold
+
         top_doc_ids = sorted(fused_scores, key=lambda x: fused_scores[x], reverse=True)[:k]
         return [doc_map[doc_id] for doc_id in top_doc_ids]

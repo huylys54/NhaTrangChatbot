@@ -1,34 +1,41 @@
 import googlemaps
+from langchain_community.utilities import GooglePlacesAPIWrapper
 from datetime import datetime
 from dotenv import load_dotenv
 import os
 load_dotenv()
 
-gmaps = googlemaps.Client(key=os.getenv('GOOGLEMAP_API_KEY'))
+# gmaps = googlemaps.Client(key=os.getenv('GOOGLEMAP_API_KEY'))
 
-# Geocoding an address
-geocode_result = gmaps.geocode('1600 Amphitheatre Parkway, Mountain View, CA')
+# search_query = f"Vinpearl land"
 
-# Look up an address with reverse geocoding
-reverse_geocode_result = gmaps.reverse_geocode((40.714224, -73.961452))
+# results = gmaps.find_place(
+#     input=search_query,
+#     input_type="textquery",
+#     fields=["geometry", "name", "formatted_address", "place_id"]
+# )
+# candidates = results.get("candidates", [])
+# print(candidates)
+# if not candidates:
+#     print("No candidates found for the search query.")
+# place = candidates[0]
+# place_id = place["place_id"]
+# map_url = f"https://www.google.com/maps/search/?api=1&query=Google&query_place_id={place_id}"
+# context = (
+#     f"Location: {place['name']}\n"
+#     f"Address: {place['formatted_address']}\n"
+#     f"Map: {map_url}"
+# )
 
-# Request directions via public transit
-now = datetime.now()
-directions_result = gmaps.directions("Sydney Town Hall",
-                                     "Parramatta, NSW",
-                                     mode="transit",
-                                     departure_time=now)
+# print(context)
 
-# Validate an address with address validation
-addressvalidation_result =  gmaps.addressvalidation(['1600 Amphitheatre Pk'], 
-                                                    regionCode='US',
-                                                    locality='Mountain View', 
-                                                    enableUspsCass=True)
+gmaps = GooglePlacesAPIWrapper(top_k_results=5)
 
-# Get an Address Descriptor of a location in the reverse geocoding response
-address_descriptor_result = gmaps.reverse_geocode((40.714224, -73.961452), enable_address_descriptor=True)
+search_query = f"quán ăn ngon tại nha trang"
+results = gmaps.run(search_query)
+# The wrapper returns a string summary, but you can also parse for place_id if needed
+# For a map link, you can use Google Maps search URL
+map_url = f"https://www.google.com/maps/search/?api=1&query={search_query.replace(' ', '+')}"
+context = f"{results}\nMap: {map_url}"
 
-print(geocode_result)
-print(reverse_geocode_result)
-print(addressvalidation_result)
-print(address_descriptor_result)
+print(context)
