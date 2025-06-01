@@ -1,7 +1,6 @@
 from langgraph.graph import StateGraph, END
-from typing import TypedDict, Dict, Optional
+from typing import TypedDict, Dict
 from langchain_groq import ChatGroq
-from langchain_together import ChatTogether
 from langchain.retrievers.document_compressors import CrossEncoderReranker
 from langchain_community.cross_encoders import HuggingFaceCrossEncoder
 from langchain.memory import ConversationBufferWindowMemory

@@ -20,15 +20,3 @@ GLOB_PATTERN = "./**/*.md"
 # Embedding model
 EMBEDDING_MODEL = "keepitreal/vietnamese-sbert"
 
-
-# Crawler settings
-CRAWLER_URLS = [
-    'https://nhatrang.khanhhoa.gov.vn/gioi-thieu-chung',
-    'https://nhatrang.khanhhoa.gov.vn/di-tich-lich-su-danh-lam-thang-canh',
-    'https://nhatrang.khanhhoa.gov.vn/tour-du-lich',
-    'https://nhatrang.khanhhoa.gov.vn/am-thuc',
-    'https://nhatrang.khanhhoa.gov.vn/luu-tru',
-    'https://nhatrang.khanhhoa.gov.vn/thong-tin-huu-ich',
-    'https://nhatrang.khanhhoa.gov.vn/so-dien-thoai-can-thiet'
-]
-
