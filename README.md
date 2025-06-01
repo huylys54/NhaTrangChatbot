@@ -36,6 +36,13 @@ python -m venv .venv
 source .venv/bin/activate
 ```
 
+### 0.5. Setup environment variables
+Copy the example environment file and edit as needed:
+```sh
+cp .env.example .env
+```
+Edit `.env` to set your API keys.
+
 ### 1. Install dependencies
 
 ```sh
@@ -102,8 +109,6 @@ After retrieving candidate documents using hybrid search, the system uses a **cr
 
 This reranking step helps ensure that the most contextually relevant and semantically accurate information is provided to the user, even if the initial retrieval step returns noisy or loosely related results.
 
-*You can customize the reranker model or its threshold in `config.py` or the agent code.*
-
 
 ### RAG Pipeline Implementation
 
@@ -131,7 +136,11 @@ The conversational assistant follows this flow:
    * If **search** fails → raise error and stop.
 
 6. **Generate Final Answer**: Use retrieved or searched context to generate a response.
-![state graph](state_graph.png "State Graph")
+\n\n
+
+<p align="center">
+  <img width="460" height="300" src="./state_graph.png">
+</p>
 
 ### Streaming Response vs Full Response Graph
 
