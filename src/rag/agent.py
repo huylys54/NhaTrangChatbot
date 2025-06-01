@@ -26,7 +26,7 @@ class ChatState(TypedDict):
     
 
 class ConversationalRetrievalAgent:
-    def __init__(self, indexer, temperature=0.2, max_history_tokens=1000):
+    def __init__(self, indexer, temperature=0.2, max_history_tokens=1000, streaming=False):
         self.indexer = indexer
         self.temperature = temperature
         self.llm_response = ChatGroq(
@@ -118,7 +118,10 @@ class ConversationalRetrievalAgent:
                 "Place:"
             )
         }
-        self.app = self._build_graph()
+        if streaming:
+            self.app = self._build_streaming_graph()
+        else:
+            self.app = self._build_graph()
         
 
     def _estimate_tokens(self, text: str) -> int:
@@ -346,6 +349,71 @@ class ConversationalRetrievalAgent:
         return graph.compile()
     
     
+    def _build_streaming_graph(self):
+        """Build LangGraph workflow for streaming responses."""
+        graph = StateGraph(ChatState)
+        graph.add_node("detect_language", self.detect_lang)
+        graph.add_node("classify_intent", self.classify_intent)
+        graph.add_node("execute_tool", self.execute_tool)
+        graph.add_node("handle_error", self.handle_error)
+
+        graph.set_entry_point("detect_language")
+        graph.add_edge("detect_language", "classify_intent")
+        graph.add_edge("classify_intent", "execute_tool")
+        graph.add_edge("execute_tool", "handle_error")
+        graph.add_edge("handle_error", END)  # End here, response generation is handled separately
+        
+        return graph.compile()
+    
+    
+    def stream_response(self, query, language, context, history):
+        """
+        Generate and yield response chunks using the language model's streaming capability.
+        """
+        hist = self._truncate_history(history)
+        prompt = self.prompts["generate_response"].format(
+            history=hist, context=context, language=language
+        )
+        messages = [("system", prompt), ("user", query)]
+        try:
+            # Stream response chunks from llm_response (ChatGroq with streaming=True)
+            for chunk in self.llm_response.stream(messages):
+                text = chunk.content if hasattr(chunk, "content") else str(chunk)
+                yield text  # Yield the content of each chunk
+        except Exception as e:
+            yield f"Error: {str(e)}"
+    
+    
+    def ask_streaming(self, question, language=None):
+        """
+        Ask a question and return a generator that yields response chunks.
+        This is useful for streaming responses in real-time.
+        """
+        history = self.memory.load_memory_variables({})["chat_history"]
+        init_state = {
+            "query": question,
+            "language": language if language else "",
+            "context": "",
+            "history": history,
+            "intent": "",
+            "error": ""
+        }
+        # Run the workflow up to error handling
+        final = self.app.invoke(init_state)
+        full_response = ""
+        
+        def generate():
+            nonlocal full_response
+            # Stream response chunks
+            for chunk in self.stream_response(final["query"], final["language"], final["context"], final["history"]):
+                full_response += chunk
+                yield chunk
+            # Save the full response to memory after streaming
+            self.memory.save_context(inputs={"human": question}, outputs={"ai": full_response})
+        
+        return generate()
+        
+    
     
     def ask(self, question, language=None):
         history = self.memory.load_memory_variables({})["chat_history"]  # already formatted string
@@ -361,4 +429,7 @@ class ConversationalRetrievalAgent:
         final = self.app.invoke(init_state)
         
         return final["response"]
+    
+    
+    
     

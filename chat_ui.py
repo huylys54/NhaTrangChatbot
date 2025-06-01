@@ -1,4 +1,3 @@
-
 import streamlit as st
 import requests
 import re
@@ -46,29 +45,31 @@ def parse_history(history_str: str) -> list:
 
 def stream_response(query: str):
     """
-    Send the chatbot's response request to the /chat endpoint and yield the full response.
+    Send a request to the /chat endpoint and yield response chunks.
     """
     try:
         response = requests.post(
             f"{API_BASE_URL}/chat",
             json={"query": query},
-            timeout=30
+            timeout=30,
+            stream=True  # Enable streaming from the API
         )
         if response.status_code == 200:
-            data = response.json()
-            yield data.get("response", "")
+            # Iterate over response chunks
+            for chunk in response.iter_content(chunk_size=None, decode_unicode=True):
+                if chunk:
+                    yield chunk
         else:
             yield f"Error: API returned status code {response.status_code}"
     except requests.exceptions.RequestException as e:
         yield f"Error connecting to API: {e}"
 
 def display_chat():
-    """Display the chat interface with history, input, and responses."""
+    """Display the chat interface with streaming responses."""
     st.title("Nha Trang Chatbot 🤖🏖️🌴")
 
-    # Use session_state to keep local chat history
+    # Initialize local history
     if "local_history" not in st.session_state:
-        # On first load, fetch from backend
         try:
             response = requests.get(f"{API_BASE_URL}/history")
             if response.status_code == 200:
@@ -80,24 +81,24 @@ def display_chat():
         except requests.exceptions.RequestException:
             st.session_state["local_history"] = []
 
-    # Display all messages in local history
+    # Display chat history
     for msg in st.session_state["local_history"]:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"], unsafe_allow_html=False)
 
-    # Chat input for new queries
+    # Handle new user input
     if prompt := st.chat_input("What is your question?"):
-        # Display user's message and append to local history
         with st.chat_message("user"):
             st.markdown(prompt)
         st.session_state["local_history"].append({"role": "user", "content": prompt})
 
-        # Show "working..." while waiting for the bot's response
+        # Stream and display the assistant's response
         with st.chat_message("assistant"):
-            working_placeholder = st.empty()
-            working_placeholder.markdown("*working...*", unsafe_allow_html=True)
-            full_response = next(stream_response(prompt))
-            working_placeholder.markdown(_fix_streamlit_space(full_response), unsafe_allow_html=False)
+            response_placeholder = st.empty()
+            full_response = ""
+            for chunk in stream_response(prompt):
+                full_response += chunk
+                response_placeholder.markdown(_fix_streamlit_space(full_response), unsafe_allow_html=False)
         st.session_state["local_history"].append({"role": "assistant", "content": full_response})
 
     # Button to clear chat history
