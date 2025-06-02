@@ -146,10 +146,9 @@ The conversational assistant follows this flow:
    * If **search** fails → raise error and stop.
 
 6. **Generate Final Answer**: Use retrieved or searched context to generate a response.
-\n\n
 
 <p align="center">
-  <img width="460" height="300" src="./state_graph.png">
+  <img src="./state_graph.png">
 </p>
 
 ### Streaming Response vs Full Response Graph
