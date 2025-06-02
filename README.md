@@ -15,6 +15,7 @@ A conversational AI assistant for travel information about Nha Trang, Vietnam. T
 ```
 .
 ├── chat_ui.py                # Streamlit UI for chat
+├── indexing_docs.py          # Indexing markdown documents
 ├── config.py                 # Configuration and constants
 ├── src/
 │   ├── api/                  # FastAPI backend
@@ -56,8 +57,17 @@ pip install -r requirements.txt
 
 ### 3. Build the index
 
+You can build or update the hybrid index using the provided script:
+
 ```sh
-python -m src.rag.embedder
+python indexing_docs.py
+```
+
+You can customize the chunk size, overlap, and directories using command-line arguments.
+For example:
+
+```sh
+python indexing_docs.py --dir_path data/raw --persist_directory data/chroma --bm25_directory data/bm25
 ```
 
 ### 4. Start the API server
@@ -176,7 +186,8 @@ This keeps the last 5 interactions for context continuity within the session.
 
 ## Customization
 
-- To add new data, place markdown files in `data/raw/` and re-run the chunker/indexer.
+- To add new data, place markdown files in your chosen `--dir-path` (default: `data/raw/`) and re-run [`indexing_docs.py`](indexing_dodcs.py).
+- To change chunking or indexing parameters, edit the arguments in [`indexing_docs.py`](indexing_dodcs.py) or pass them via the command line.
 - To change models, update settings in [`config.py`](config.py).
 
 ## Contributing

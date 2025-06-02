@@ -4,15 +4,17 @@ from langchain.schema import Document
 import uuid
 import hashlib
 from typing import List
+from config import GLOB_PATTERN, CHUNK_SIZE, CHUNK_OVERLAP
 
 class DocumentChunker:
-    def __init__(self, dir_path, glob_pattern='./**/*.md', max_len=1000):
+    def __init__(self, dir_path, glob_pattern=GLOB_PATTERN, chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP):
         self.dir_path = dir_path
         self.glob_pattern = glob_pattern
         self.documents = []
         self.all_sections = []
-        self.max_len = max_len
-        
+        self.chunk_size = chunk_size
+        self.chunk_overlap = chunk_overlap
+
     def load_documents(self):
         """Load markdown documents from the specified directory."""
         text_loader_kwargs={'autodetect_encoding': True}
@@ -30,7 +32,7 @@ class DocumentChunker:
         base = text + str(metadata)
         return hashlib.md5(base.encode('utf-8')).hexdigest()
     
-    def smart_chunk_markdown(self, markdown: str, max_len: int = 1000) -> List[dict]:
+    def smart_chunk_markdown(self, markdown: str) -> List[dict]:
         """Hierarchically splits markdown by #, ##, ### headers, then uses LangChain splitter to ensure all chunks < max_len.
         Returns a list of dictionaries with text and metadata."""
         
@@ -44,8 +46,8 @@ class DocumentChunker:
             strip_headers=False  # Keep headers in content for context
         )
         char_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=max_len,
-            chunk_overlap=50,
+            chunk_size=self.chunk_size,
+            chunk_overlap=self.chunk_overlap,
             length_function=len,
             separators=["\n\n", "\n", " ", ""]
         )
@@ -59,7 +61,7 @@ class DocumentChunker:
 
         if has_headers:
             for doc in header_docs:
-                if len(doc.page_content) > max_len:
+                if len(doc.page_content) > self.chunk_size:
                     split_texts = char_splitter.split_text(doc.page_content)
                     for text in split_texts:
                         if text.strip():
@@ -92,9 +94,9 @@ class DocumentChunker:
 
         if not chunks and markdown.strip():
             meta = {}
-            chunk_id = self._generate_chunk_id(markdown.strip()[:max_len], meta)
+            chunk_id = self._generate_chunk_id(markdown.strip()[:self.chunk_size], meta)
             chunks.append({
-                "text": markdown.strip()[:max_len],
+                "text": markdown.strip()[:self.chunk_size],
                 "metadata": meta,
                 "chunk_id": chunk_id
             })
