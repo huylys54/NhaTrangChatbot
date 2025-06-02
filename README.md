@@ -1,4 +1,6 @@
 # Nha Trang Travel Chatbot
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/huylys54/NhaTrangChatbot)
+
 
 A conversational AI assistant for travel information about Nha Trang, Vietnam. This project combines retrieval-augmented generation (RAG), hybrid search (BM25 + embeddings), and streaming chat UI.
 
