@@ -59,7 +59,7 @@ class ConversationalRetrievalAgent:
         )
         
         self.search_tool = TavilySearchResults(
-            max_results=3,
+            max_results=5,
             topic="general",
             api_key=os.getenv('TAVILY_API_KEY')
         )
@@ -75,46 +75,50 @@ class ConversationalRetrievalAgent:
                 
         self.prompts = {
             "classify_intent": (
-                "You are a routing assistant for a Nha Trang Tourism Chatbot. "
-                "Given a user query and conversation history, determine the best action: 'retrieve' (fetch from pre-crawled documents), 'search' (web search for real-time data or weather data), or 'location' (get map/location of a place or a category of places). "
-                "Consider the query's language and intent.\n"
-                "Default to 'retrieve' for most travel-related queries (e.g., places to visit, activities, cuisine, culture, attractions) and generic/non-specific queries (e.g., greetings, casual conversation) to leverage the comprehensive Nha Trang travel database.\n"
-                "Choose 'search' only for queries explicitly requesting real-time, recent information (e.g., containing 'today', 'now', 'current events', 'this week') or about weather conditions (e.g., 'weather', 'temperature', 'forecast', 'how it feel like', 'temperature').\n"
-                "Choose 'location' for queries asking about the location, address, or map of a place, or for categories of places (such as restaurants, hotels, cafes, bars, spas, shops, etc.) in a specific area (e.g., 'Where is Vinpearl?', 'Show me the map of Po Nagar Tower', 'restaurants near District 1', 'quán ăn ngon tại Hòn Tằm', 'khách sạn gần biển', 'quán ăn ngon tại nha trang').\n"
-                "Return only the action name: [retrieve|search|location]\n"
-                "History: {history}\nLanguage: {language}"),
+                "Determine the best action for the Nha Trang Tourism Chatbot based on the user query and conversation history: "
+                "'retrieve' (fetch from pre-crawled documents), "
+                "'search' (web search for real-time data or weather, e.g 'Nha Trang weather today', 'events at VinWonders right now') "
+                "or 'location' (get map/location of a place or category). "
+                "Default to 'retrieve' for most travel-related and generic queries. "
+                "Choose 'search' only for explicit requests for real-time information (e.g., 'today', 'now', 'current events', 'weather'). "
+                "Choose 'location' for queries about the location, address, or map of a place or category in Nha Trang. "
+                "Return only the action name: [retrieve|search|location]. "
+                "History: {history}\nLanguage: {language}"
+            ),
             "transform_query": (
-                "You are a query optimization assistant for a keyword-based web search engine. Given a user query, rewrite it into a concise, keyword-focused search query optimized for keyword matching (e.g., like Google or Tavily). Remove unnecessary words, focus on key terms, and ensure clarity. Preserve the intent and language of the original query."
-                "Return only the transformed query.\nQuery: {query}\nLanguage: {language}"),
+                "Rewrite the user query into a concise, keyword-focused search query for a web search engine, ensuring relevance to Nha Trang. "
+                "Remove unnecessary words and focus on key terms. "
+                "Append the time frame ('in the last week', 'today', etc.) if the query is time-sensitive (e.g., 'events in the last week', 'news at Nha Trang today'). "
+                "If the query is not about Nha Trang, add 'Nha Trang' or rephrase it to be about Nha Trang. "
+                "Preserve the intent and language of the original query. "
+                "Return only the transformed query. "
+                "Query: {query}\nLanguage: {language}"
+            ),
             "generate_response": (
-                "You are a travel chatbot for Nha Trang, Vietnam. Your role is to provide informative, concise, and accurate answers about travel-related topics (destinations, cuisine, festivals, activities, culture). "
+                "You are NhaTrangGo - a travel chatbot for Nha Trang, Vietnam. Your role is to provide informative, concise, and accurate answers about travel-related topics (destinations, cuisine, festivals, activities, culture). "
                 "Respond in the language specified by the user (ISO 639-1 code, e.g., 'vi' for Vietnamese, 'en' for English, 'zh' for Chinese). "
                 "Use the provided context and conversation history to tailor your response. "
-                "If the context contains a list of locations (with names and addresses), and the user asks for addresses, extract and list the addresses for each place in a clear, bullet-pointed format. "
-                "If the user asks about a specific place, select the most relevant (usually the top) location from the context and respond with its name, address and the map url. "
-                "If the user asks about places in general, summarize all the locations in the context, listing their names, addresses and map urls. "
-                "Remember, all the locations are in Nha Trang, Vietnam. If user asks about another location outside Nha Trang, "
-                "indicate that you only provide information about Nha Trang. "
+                "If the context contains multiple locations and the user asks for addresses, list them in a bullet-pointed format. "
+                "If the user asks about a specific place, provide its name, address, website (if available), and map URL. "
+                "If the user asks about places in general, summarize all locations in the context. "
+                "If the query is about a location outside Nha Trang, indicate that you only provide information about Nha Trang. "
                 "If context is empty, rely on general knowledge or indicate a lack of specific information. "
+                "Temperature should always be in celsius. "
                 "Keep answers between 100 and 1000 words. Ensure responses are engaging, helpful, and culturally sensitive. "
-                "History chat: {history}\nContext: {context}\nLanguage: {language}"),
+                "History chat: {history}\nContext: {context}\nLanguage: {language}"
+            ),
             "translate_to_vi": (
                 "Translate the following text to Vietnamese. Return only the translated text, without explanation or extra information.\n\nText: {text}"
             ),
             "resolve_place": (
-                "Given the following conversation history and the latest user query, "
-                "extract the most relevant place name or general place category the user wants to find the location for in Nha Trang. "
-                "If the query refers to a previously mentioned place (e.g., 'this place', 'there'), "
-                "replace it with the actual place name from the conversation. "
-                "If the query is about a general category (e.g., 'restaurants near Hon Tam'), return that phrase. "
-                "If you cannot determine any place or category, use the original query as the answer. "
-                "Return only a single string: the most relevant place name or general place category. "
-                "For example, if the query is about multiple places, return the general category (e.g., 'restaurants near Hon Tam'). "
-                "Always add the location 'Nha Trang' to the place name or category. "
-                "Return only the string, nothing else.\n\n"
-                "Conversation history:\n{history}\n"
-                "User query: {query}\n"
-                "Place:"
+                "Extract the most relevant place name or general place category in Nha Trang from the conversation history and user query. "
+                "If the query refers to a previously mentioned place, replace pronouns with the actual place name (e.g., 'this place' -> 'Hon Tam'). "
+                "If the query is about a general category, return that phrase (e.g., 'restaurants near Hon Tam'). "
+                "If you cannot determine a place or category, use the original query. "
+                "Always add 'Nha Trang' to the place name or category. "
+                "Return only the string. "
+                "Example: If the query is 'restaurants near Hon Tam', return 'restaurants near Hon Tam Nha Trang'. "
+                "Conversation history:\n{history}\nUser query: {query}\nPlace:"
             )
         }
         if streaming:
@@ -163,7 +167,7 @@ class ConversationalRetrievalAgent:
     def _translate_to_vi(self, query) -> str:
         """Translate text to Vietnamese using LLM."""
         prompt = self.prompts["translate_to_vi"].format(text=query)
-        messages = [("system", prompt), ("user", query)]
+        messages = [("system", prompt)]
         try:
             response = self.llm_router.invoke(messages)
             return response.content.strip()
@@ -194,7 +198,7 @@ class ConversationalRetrievalAgent:
             query=query,
             language=language
         )
-        messages = [("system", prompt), ("user", query)]
+        messages = [("system", prompt)]
         try:
             response = self.llm_router.invoke(messages)
             transformed_query = response.content.strip()
@@ -212,7 +216,8 @@ class ConversationalRetrievalAgent:
             transformed_query = self._transform_query(query, language)
             results = self.search_tool.invoke(
                 {
-                    "query": transformed_query
+                    "query": transformed_query,
+                    "time_range": "week"
                 }
             )
             contents = "\n".join([r.get("content", "") for r in results])
@@ -229,7 +234,7 @@ class ConversationalRetrievalAgent:
     def _location_query(self, query: str, history:str) -> Dict:
         """Use LLM to rewrite the query for a location search, resolving references."""
         prompt = self.prompts["resolve_place"].format(history=history, query=query)
-        messages = [("system", prompt), ("user", query)]
+        messages = [("system", prompt)]
         try:
             response = self.llm_router.invoke(messages)
             search_query = response.content.strip()
@@ -373,6 +378,7 @@ class ConversationalRetrievalAgent:
         prompt = self.prompts["generate_response"].format(
             history=hist, context=context, language=language
         )
+        print(context)
         messages = [("system", prompt), ("user", query)]
         try:
             # Stream response chunks from llm_response (ChatGroq with streaming=True)
