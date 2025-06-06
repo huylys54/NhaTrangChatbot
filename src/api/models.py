@@ -1,25 +1,18 @@
 from pydantic import BaseModel
+from typing import List, Optional
 
 class ChatRequest(BaseModel):
-    """
-    Represents a chat request with query, user_id and language.
-    """
-    
     query: str
-    user_id: str = "default"
-    
-    
-class SearchRequest(BaseModel):
-    """
-    Represents a search request with query, user_id and language.
-    """
-    
-    query: str
-    
-class MetadataResponse(BaseModel):
-    """
-    Represents metadata response containing information about the index."""
-    
-    documents: int
-    images: int
-    last_updated: str
+    language: Optional[str] = None
+
+class ImageData(BaseModel):
+    image_id: str
+    path: str
+    caption: str
+    tags: List[str]
+    relevance_score: Optional[float] = None
+
+class ChatResponse(BaseModel):
+    response: str
+    images: Optional[List[ImageData]] = None
+    has_images: bool = False

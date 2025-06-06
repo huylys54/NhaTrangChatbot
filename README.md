@@ -115,13 +115,6 @@ bm25_weight * (1 / rank_bm25) + emb_weight * (1 / rank_emb)
 This hybrid approach balances keyword precision and semantic relevance.
 
 
-### Cross-Encoder Reranking
-
-After retrieving candidate documents using hybrid search, the system uses a **cross-encoder reranker** to further improve answer quality. The cross-encoder model takes each candidate document and the query as input and scores their relevance using deep neural attention over both texts. The top-ranked documents are then used as context for the final answer generation.
-
-This reranking step helps ensure that the most contextually relevant and semantically accurate information is provided to the user, even if the initial retrieval step returns noisy or loosely related results.
-
-
 ### RAG Pipeline Implementation
 
 The conversational assistant follows this flow:

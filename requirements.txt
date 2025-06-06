@@ -1,20 +1,52 @@
-fastapi[standard]
-uvicorn
-pydantic
-langchain
-langgraph
-langchain-community
-langchain-groq
-langchain-together
-langchain-chroma
-langchain-huggingface
-transformers
-langdetect
-tavily-python
-chromadb
-python-dotenv
-langchain-core
-rank-bm25
-streamlit
-httpx
-tqdm
+# Core web framework
+fastapi==0.115.9
+uvicorn==0.34.2
+streamlit==1.45.1
+
+# Data validation and environment
+pydantic==2.11.4
+pydantic-settings==2.9.1
+python-dotenv==1.1.0
+
+# LangChain ecosystem
+langchain==0.3.25
+langchain-core==0.3.61
+langchain-community==0.3.24
+langchain-chroma==0.2.4
+langchain-huggingface==0.2.0
+langchain-text-splitters==0.3.8
+langgraph==0.4.7
+
+# LLM providers
+langchain-groq==0.3.2
+langchain-together==0.3.0
+
+# Search and retrieval
+langchain-tavily==0.2.0
+tavily-python==0.7.2
+chromadb==1.0.9
+rank-bm25==0.2.2
+
+# ML and embeddings
+transformers==4.52.2
+torch==2.7.0+cu128
+sentence-transformers==4.1.0
+huggingface-hub==0.31.4
+
+# NLP and language processing
+langdetect==1.0.9
+underthesea==6.8.4
+
+# HTTP requests and utilities
+requests==2.32.3
+httpx==0.28.1
+
+# Image processing
+pillow==11.2.1
+
+# Maps and location services
+googlemaps==4.10.0
+
+# Data processing
+pandas==2.2.3
+numpy==2.2.6

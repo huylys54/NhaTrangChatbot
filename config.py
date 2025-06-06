@@ -11,6 +11,7 @@ RAW_DATA_DIR = os.path.join(DATA_DIR, "raw")
 CLEANED_DATA_DIR = os.path.join(DATA_DIR, "processed")
 CHROMA_DB_DIR = os.path.join(DATA_DIR, "chroma_db")
 BM25_DIR = os.path.join(DATA_DIR, "bm25")
+IMAGES_DIR = os.path.join(DATA_DIR, "images")
 
 # Document chunking settings
 CHUNK_SIZE = 1000
